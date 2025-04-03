@@ -1,155 +1,58 @@
 package com.example.smishingdetectionapp.ui.Register;
 
-
-
 import android.content.Intent;
 import android.os.Bundle;
-import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
-
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-
-import com.example.smishingdetectionapp.BuildConfig;
-import com.example.smishingdetectionapp.DataBase.Retrofitinterface;
-import com.example.smishingdetectionapp.DataBase.SignupResponse;
-import com.example.smishingdetectionapp.MainActivity;
+import androidx.lifecycle.ViewModelProvider;
 import com.example.smishingdetectionapp.R;
-import com.example.smishingdetectionapp.databinding.ActivityEmailVerifyBinding;
-import com.example.smishingdetectionapp.databinding.ActivitySignupBinding;
 import com.example.smishingdetectionapp.ui.login.LoginActivity;
-import com.google.android.material.snackbar.Snackbar;
-
-import java.util.HashMap;
-
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
 
 public class EmailVerify extends AppCompatActivity {
 
+    private VerifyViewModel verifyViewModel;
     private String email;
-    private String fullName;
-    private String phoneNumber;
-    private String password;
-    private String verificationCode;
-    private EditText verificationCodeInput;
-    private Button verifyButton;
-
-    private ActivityEmailVerifyBinding binding;
-
-    private Retrofit retrofit;
-    private Retrofitinterface retrofitinterface;
-    private String BASE_URL = BuildConfig.SERVERIP;
+    private static final String TAG = "EmailVerify";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_email_verify);
 
-        binding = ActivityEmailVerifyBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
+        verifyViewModel = new ViewModelProvider(this).get(VerifyViewModel.class);
 
-        // Initialize Retrofit
-        retrofit = new Retrofit.Builder()
-                .baseUrl(BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
+        EditText verifyText = findViewById(R.id.verifytext);
+        Button confirmBtn = findViewById(R.id.confirmBtn);
+        ImageButton backBtn = findViewById(R.id.signup_back);
 
-        retrofitinterface = retrofit.create(Retrofitinterface.class);
+        email = getIntent().getStringExtra("email"); // Get email from intent
+        Log.d(TAG, "Received email for OTP verification: " + email);
 
-        ImageButton imageButton = findViewById(R.id.signup_back);
-        imageButton.setOnClickListener(v -> {
-            startActivity(new Intent(this, LoginActivity.class));
-            finish();
-        });
+        backBtn.setOnClickListener(v -> onBackPressed());
 
-        // Get the data passed from the RegisterMain activity
-        Intent intent = getIntent();
-        fullName = intent.getStringExtra("fullName");
-        phoneNumber = intent.getStringExtra("phoneNumber");
-        email = intent.getStringExtra("email");
-        password = intent.getStringExtra("password");
-        verificationCode = intent.getStringExtra("code");
-
-
-
-        verificationCodeInput = findViewById(R.id.verifytext);
-        verifyButton = findViewById(R.id.confirmBtn);
-
-        /*
-        verifyButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String enteredCode = verificationCodeInput.getText().toString();
-
-
-
-                // Check if the entered code matches the one sent via email
-                if (enteredCode.equals(verificationCode)) {
-                    Snackbar.make(binding.getRoot(), "Email verified successfully.", Snackbar.LENGTH_LONG).show();
-
-
-                    // Proceed with the signup process after successful verification
-                    completeSignup();
-                } else {
-                    Snackbar.make(binding.getRoot(), "Invalid verification code. Please try again.", Snackbar.LENGTH_LONG).show();
-                }
+        confirmBtn.setOnClickListener(v -> {
+            String otpCode = verifyText.getText().toString().trim();
+            if (otpCode.length() == 6) {
+                Log.d(TAG, "OTP code entered: " + otpCode);
+                verifyViewModel.verifyOTP(email, otpCode);
+            } else {
+                Toast.makeText(this, "Enter a valid 6-digit OTP", Toast.LENGTH_SHORT).show();
             }
         });
-         */
 
-        // Bypass the email verification for testing purposes
-        verifyButton.setOnClickListener(v -> {
-            // Show a message indicating the verification is skipped
-            Snackbar.make(binding.getRoot(), "Email verified successfully (bypassed for testing).", Snackbar.LENGTH_LONG).show();
-            completeSignup();  // Proceed with signup
-        });
-    }
-
-    /*
-    private void completeSignup() {
-        HashMap<String, String> map = new HashMap<>();
-        map.put("FullName", fullName);
-        map.put("PhoneNumber", phoneNumber);
-        map.put("Email", email);
-        map.put("Password", password);
-
-        Call<SignupResponse> call = retrofitinterface.executeSignup(map);
-        call.enqueue(new Callback<SignupResponse>() {
-            @Override
-            public void onResponse(Call<SignupResponse> call, Response<SignupResponse> response) {
-                if (response.isSuccessful()) {
-                    Snackbar.make(binding.getRoot(), "Registration successful.", Snackbar.LENGTH_LONG).show();
-                    Intent intent = new Intent(EmailVerify.this, MainActivity.class);
-                    startActivity(intent);
-
-                } else if (response.code() == 409) {
-                    Snackbar.make(binding.getRoot(), "Email already exists.", Snackbar.LENGTH_LONG).show();
-                } else {
-                    Snackbar.make(binding.getRoot(), "Signup failed. Try again.", Snackbar.LENGTH_LONG).show();
-                }
-            }
-
-            @Override
-            public void onFailure(Call<SignupResponse> call, Throwable t) {
-                Snackbar.make(binding.getRoot(), t.getMessage(), Snackbar.LENGTH_LONG).show();
+        verifyViewModel.getVerificationResponse().observe(this, response -> {
+            if (response != null && response.isSuccess()) {
+                Toast.makeText(this, "Email verified successfully!", Toast.LENGTH_SHORT).show();
+                startActivity(new Intent(EmailVerify.this, LoginActivity.class));
+                finish();
+            } else {
+                Toast.makeText(this, "Invalid OTP. Please try again.", Toast.LENGTH_SHORT).show();
             }
         });
     }
-
-     */
-    // Bypassing verification for testing purposes
-    private void completeSignup() {
-        // Directly simulate a successful signup
-        Snackbar.make(binding.getRoot(), "Registration successful (bypassed).", Snackbar.LENGTH_LONG).show();
-
-        // After successful registration, navigate to MainActivity
-        Intent intent = new Intent(EmailVerify.this, MainActivity.class);
-        startActivity(intent);
-    }
-
 }

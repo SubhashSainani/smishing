@@ -22,7 +22,6 @@ import com.example.smishingdetectionapp.DataBase.DBresult;
 import com.example.smishingdetectionapp.DataBase.Retrofitinterface;
 import com.example.smishingdetectionapp.MainActivity;
 import com.example.smishingdetectionapp.R;
-import com.example.smishingdetectionapp.SharedActivity;
 import com.example.smishingdetectionapp.databinding.ActivityLoginBinding;
 import com.example.smishingdetectionapp.detections.DatabaseAccess;
 import com.example.smishingdetectionapp.ui.Register.RegisterMain;
@@ -33,6 +32,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.SignInButton;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
+import com.google.android.material.snackbar.Snackbar;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -75,8 +75,9 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
-        // ViewModel setup
-        loginViewModel = new ViewModelProvider(this, new LoginViewModelFactory())
+        // ViewModel setup - Updated to use AndroidViewModel
+        loginViewModel = new ViewModelProvider(this,
+                new LoginViewModelFactory(getApplication()))
                 .get(LoginViewModel.class);
 
         // View bindings
@@ -87,7 +88,7 @@ public class LoginActivity extends AppCompatActivity {
         final SignInButton googleBtn = binding.googleBtn;
         final Button registerButton = binding.registerButton;
         final ImageButton togglePasswordVisibility = binding.togglePasswordVisibility;
-        final Button togglePinLogin = binding.togglePinLogin;  // Added missing reference for togglePinLogin button
+        final Button togglePinLogin = binding.togglePinLogin;
 
         // Toggle functionality for PIN and Password login
         togglePinLogin.setOnClickListener(v -> {
@@ -110,11 +111,13 @@ public class LoginActivity extends AppCompatActivity {
 
         // Handle login button click
         loginButton.setOnClickListener(v -> {
+            loadingProgressBar.setVisibility(View.VISIBLE);
             String input = passwordEditText.getText().toString();
             if (isPinLogin) {
                 // Handle PIN login
                 if (input.length() != 6) {
                     passwordEditText.setError("PIN must be 6 digits");
+                    loadingProgressBar.setVisibility(View.GONE);
                     return;
                 }
                 loginWithPin(input);
@@ -123,9 +126,11 @@ public class LoginActivity extends AppCompatActivity {
                 String email = usernameEditText.getText().toString();
                 if (email.isEmpty() || input.isEmpty()) {
                     Toast.makeText(LoginActivity.this, "Email and Password must not be empty", Toast.LENGTH_SHORT).show();
+                    loadingProgressBar.setVisibility(View.GONE);
                     return;
                 }
-                loginWithPassword(email, input);
+                // Use the new login method with repository pattern
+                loginViewModel.login(email, input);
             }
         });
 
@@ -168,6 +173,29 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
+        // Observe LoginResponse - NEW
+        loginViewModel.getLoginResponse().observe(this, response -> {
+            loadingProgressBar.setVisibility(View.GONE);
+            if (response != null && response.isSuccess()) {
+                // Handle successful login
+                Toast.makeText(LoginActivity.this, response.getMessage(), Toast.LENGTH_SHORT).show();
+                // Save token if provided
+                // if (response.getToken() != null && !response.getToken().isEmpty()) {
+                //     saveAuthToken(response.getToken());
+                // }
+                navigateToMainActivity();
+            }
+        });
+
+        // Observe error messages - NEW
+        loginViewModel.getError().observe(this, error -> {
+            loadingProgressBar.setVisibility(View.GONE);
+            if (error != null) {
+                Snackbar.make(findViewById(android.R.id.content), error, Snackbar.LENGTH_LONG).show();
+            }
+        });
+
+        // Observe legacy LoginResult (for compatibility)
         loginViewModel.getLoginResult().observe(this, new Observer<LoginResult>() {
             @Override
             public void onChanged(@Nullable LoginResult loginResult) {
@@ -229,62 +257,19 @@ public class LoginActivity extends AppCompatActivity {
         }
     }
 
-    /*
-    private void loginWithPin(String pin) {
-        // Open the database
-        DatabaseAccess databaseAccess = DatabaseAccess.getInstance(this);
-        databaseAccess.open();
-
-        // Validate the PIN
-        boolean isValid = databaseAccess.validatePin(pin);
-
-        if (isValid) {
-            // PIN is valid
-            Toast.makeText(LoginActivity.this, "PIN verified successfully", Toast.LENGTH_SHORT).show();
-            navigateToMainActivity();
-        } else {
-            // Invalid PIN
-            Toast.makeText(LoginActivity.this, "Invalid PIN. Please try again.", Toast.LENGTH_LONG).show();
-        }
-
-        // Close the database
-        databaseAccess.close();
-    }
-
-     */
-
     private void loginWithPin(String pin) {
         // For testing purposes, simulate a successful PIN login
         Toast.makeText(LoginActivity.this, "PIN verified successfully (bypassed for testing)", Toast.LENGTH_SHORT).show();
         navigateToMainActivity();
     }
 
-
-    /*
+    // The old method is no longer used directly but kept for compatibility
     private void loginWithPassword(String email, String password) {
-        DatabaseAccess databaseAccess = DatabaseAccess.getInstance(this);
-        databaseAccess.open();
-
-        boolean isValid = databaseAccess.validateLogin(email, password);
-
-        if (isValid) {
-            navigateToMainActivity();
-        } else {
-            Toast.makeText(LoginActivity.this, "Invalid email or password", Toast.LENGTH_LONG).show();
-        }
-
-        databaseAccess.close();
+        // Now redirects to the ViewModel login method
+        loginViewModel.login(email, password);
     }
 
-     */
-
-    private void loginWithPassword(String email, String password) {
-        // For testing purposes, simulate a successful login
-        Toast.makeText(LoginActivity.this, "Login successful (bypassed for testing)", Toast.LENGTH_SHORT).show();
-        navigateToMainActivity();
-    }
-
-
+    // Legacy method kept for compatibility
     private void handleLoginDialog() {
         final EditText usernameEditText = binding.email;
         final EditText passwordEditText = binding.password;
@@ -331,4 +316,15 @@ public class LoginActivity extends AppCompatActivity {
     private void showLoginFailed(@StringRes Integer errorString) {
         Toast.makeText(getApplicationContext(), errorString, Toast.LENGTH_SHORT).show();
     }
+
+    // Optional: Helper method to save auth token if your backend uses JWT
+    /*
+    private void saveAuthToken(String token) {
+        // Save to SharedPreferences or other secure storage
+        SharedPreferences prefs = getSharedPreferences("AuthPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString("auth_token", token);
+        editor.apply();
+    }
+    */
 }
